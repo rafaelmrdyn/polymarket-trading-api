@@ -1,23 +1,25 @@
-# Polymarket Backend
+# Polymarket Backend API
 
-Express.js backend server that provides API endpoints and WebSocket connections for the Polymarket trading platform. Features backend signing architecture for secure order management without requiring frontend wallet connections.
+Express.js backend server that provides REST API endpoints and WebSocket connections for trading on Polymarket. Features secure backend signing architecture for order management, eliminating the need for client-side wallet connections.
 
 ## Features
 
-- 🔐 **Backend Signing**: Secure order signing using private key (no MetaMask required)
+- 🔐 **Backend Signing**: Secure order signing using private key stored on the server
 - 📡 **RESTful API**: Complete API for markets, orders, balances, and trades
 - 🔌 **WebSocket Server**: Real-time updates for orderbooks and user orders
-- 🔗 **Polymarket Integration**: CLOB and Gamma API integration
+- 🔗 **Polymarket Integration**: Full CLOB and Gamma API integration
 - ⛓️ **Blockchain Integration**: Polygon network support with balance queries
 - 🛡️ **Error Handling**: Comprehensive error handling and validation
+- 🚀 **Production Ready**: Built for scalability and reliability
 
 ## Architecture
 
-The backend uses a **backend signing architecture** where:
-- Orders are signed on the backend using a private key
-- Frontend sends unsigned order parameters
+The server uses a **backend signing architecture** where:
+- Orders are signed on the backend using a private key stored securely
+- Clients send unsigned order parameters via API
 - Backend handles all signing and submission to Polymarket CLOB
-- No MetaMask or wallet connection required from frontend
+- No client-side wallet connections or MetaMask required
+- Centralized trading logic for easier management and automation
 
 ### Key Components
 
@@ -101,49 +103,167 @@ Should return:
 }
 ```
 
-> **See [BACKEND_SIGNING_SETUP.md](../BACKEND_SIGNING_SETUP.md) for detailed setup instructions**
-
 ## Environment Variables
 
 ### Required Variables
 
+These must be set for the server to function properly:
+
 ```env
-# Wallet private key (must start with 0x)
+# Trading Wallet - Your wallet private key (must start with 0x)
 PRIVATE_KEY=0x...
 
-# Polymarket Builder API credentials
+# Builder Credentials - Get these from https://polymarket.com/builder
 BUILDER_API_KEY=...
 BUILDER_API_SECRET=...
 BUILDER_PASSPHRASE=...
 ```
 
-### Optional Configuration
+### Server Configuration
 
 ```env
-# Server
+# Server port (default: 5000)
 PORT=5000
-NODE_ENV=development
 
-# API Endpoints
+# Environment: development or production
+NODE_ENV=development
+```
+
+### API Endpoints
+
+```env
+# Polymarket API endpoints
 CLOB_API_URL=https://clob.polymarket.com
 GAMMA_API_URL=https://gamma-api.polymarket.com
 DATA_API_URL=https://data-api.polymarket.com
-POLYGON_RPC_URL=https://polygon-rpc.com
 
-# Blockchain
-CHAIN_ID=137
+# Blockchain RPC endpoints
+POLYGON_RPC_URL=https://polygon-rpc.com
+POLYGON_RPC_FALLBACKS=https://rpc.ankr.com/polygon,https://polygon.llamarpc.com
+
+# WebSocket endpoint
+POLYMARKET_WS_URL=wss://ws-subscriptions-clob.polymarket.com/ws/market
+```
+
+### Blockchain Configuration
+
+```env
+# Network configuration
+CHAIN_ID=137  # Polygon mainnet (default: 137)
+
+# Contract addresses (Polygon mainnet)
 CTF_EXCHANGE_ADDRESS=0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
 USDC_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
 
-# Builder Configuration
-BUILDER_ADDRESS=0x29be1a571dc1e18a946bce8c5c629faacbd436ad
-SIGNATURE_TYPE=2
-
-# CORS
-CORS_ORIGIN=http://localhost:3000
+# Proxy factory addresses
+GNOSIS_SAFE_FACTORY=0xaacfeea03eb1561c4e67d661e40682bd20e3541b
+POLYMARKET_PROXY_FACTORY=0xaB45c54AB0c941a2F231C04C3f49182e1A254052
 ```
 
-> **See [ENV_VARIABLES.md](../ENV_VARIABLES.md) for complete environment variable reference**
+### Builder Configuration
+
+```env
+# Builder address
+BUILDER_ADDRESS=0x29be1a571dc1e18a946bce8c5c629faacbd436ad
+
+# Signature type: 1=EOA, 2=Builder (default: 2)
+SIGNATURE_TYPE=2
+```
+
+### ClobClient Options
+
+```env
+# Optional geo-blocking token
+GEO_BLOCK_TOKEN=
+
+# Use server time for timestamps (default: false)
+USE_SERVER_TIME=false
+```
+
+### CORS Configuration
+
+```env
+# Allowed CORS origins (comma-separated for multiple origins)
+CORS_ORIGIN=http://localhost:3000
+
+# Production client URL (optional, for reference)
+FRONTEND_URL=https://yourdomain.com
+```
+
+### Environment Variable Validation
+
+The server validates required variables on startup:
+- **Missing `PRIVATE_KEY`**: Trading functionality disabled, warning shown
+- **Missing builder credentials**: ClobClient initialization will fail
+- **Invalid format**: Error messages will indicate the issue
+
+### Security Notes
+
+- **Never commit `.env` to version control**
+- Keep private keys and API secrets secure
+- Use different keys for development and production
+- Rotate credentials regularly
+- Use a dedicated trading wallet with limited funds
+
+## Usage
+
+### Quick Start Example
+
+Once the server is running, you can interact with it using any HTTP client or WebSocket library.
+
+**Example: Get available markets**
+```bash
+curl http://localhost:5000/api/markets?limit=10
+```
+
+**Example: Get trading address**
+```bash
+curl http://localhost:5000/api/orders/address
+```
+
+**Example: Place an order**
+```bash
+curl -X POST http://localhost:5000/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokenId": "0x...",
+    "amount": "1000000000",
+    "price": "0.65",
+    "side": 0
+  }'
+```
+
+### Client Integration
+
+This API can be integrated with any client application:
+
+- **Web Applications**: Use fetch, axios, or any HTTP client library
+- **Mobile Apps**: Standard REST API calls from iOS/Android
+- **Trading Bots**: Programmatic trading via API
+- **CLI Tools**: Command-line interfaces using curl or HTTP libraries
+- **Other Services**: Microservices integration
+
+### WebSocket Integration
+
+Connect to the WebSocket server for real-time updates:
+
+```javascript
+const ws = new WebSocket('ws://localhost:5000/ws');
+
+ws.onopen = () => {
+  // Subscribe to orderbook updates
+  ws.send(JSON.stringify({
+    type: 'subscribe',
+    channel: 'orderbook',
+    params: { market_id: '...' }
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Update:', data);
+};
+```
 
 ## API Endpoints
 
@@ -292,7 +412,7 @@ POST /api/orders
 }
 ```
 
-> **Note**: Order is automatically signed by backend using PRIVATE_KEY. No signature needed from frontend.
+> **Note**: Order is automatically signed by the backend using PRIVATE_KEY. Clients only need to send unsigned order parameters.
 
 #### Cancel Order
 
@@ -494,7 +614,7 @@ ws://localhost:5000/ws
 ## Project Structure
 
 ```
-backend/
+.
 ├── src/
 │   ├── controllers/
 │   │   ├── marketController.js    # Market API handlers
@@ -510,8 +630,10 @@ backend/
 │   └── routes/
 │       └── api.js                 # API route definitions
 ├── server.js                      # Express server entry point
-├── package.json
+├── package.json                   # Dependencies and scripts
+├── package-lock.json              # Dependency lock file
 ├── .env                           # Environment variables (not in git)
+├── .env.example                   # Example environment file
 └── README.md                      # This file
 ```
 
@@ -537,7 +659,7 @@ backend/
 
 1. **Initialization**: On server start, `signingService` creates a wallet from `PRIVATE_KEY`
 2. **ClobClient Setup**: Initializes ClobClient with Builder API credentials
-3. **Order Placement**: Frontend sends unsigned order parameters
+3. **Order Placement**: Clients send unsigned order parameters via API
 4. **Signing**: Backend signs the order using the wallet
 5. **Submission**: Signed order is submitted to Polymarket CLOB
 
@@ -548,14 +670,16 @@ The `signingService.js` handles:
 - ClobClient initialization with Builder credentials
 - Order signing and submission
 - Address derivation for order queries
+- Token approvals (automated)
 
 ### Benefits
 
-- ✅ No MetaMask required from frontend
-- ✅ Simplified UX (no signature prompts)
+- ✅ No client-side wallet connections required
+- ✅ Simplified client integration (no signature prompts)
 - ✅ Centralized trading logic
-- ✅ Better security (private key on backend)
-- ✅ Easier automation
+- ✅ Better security (private key stored on backend)
+- ✅ Easier automation and programmatic trading
+- ✅ Reduced client complexity
 
 ## Security Considerations
 
